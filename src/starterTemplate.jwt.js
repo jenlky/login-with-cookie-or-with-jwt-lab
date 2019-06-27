@@ -1,16 +1,26 @@
 const express = require("express");
 const db = require("./db");
+const cors = require("cors");
 const jwt = require("jsonwebtoken");
 
 const app = express();
 
 app.use(express.json());
 app.use(express.static("public"));
+// remove cors below to see an error on localhost:3001
+/*
+  Access to XMLHttpRequest at 'http://localhost:3000/secure' from 
+  origin 'http://localhost:3001' has been blocked by 
+  CORS policy: Response to preflight request doesn't pass access control check: 
+  No 'Access-Control-Allow-Origin' header is present on the requested resource.
+*/
+app.use(cors());
 
 app.get("/", (req, res) => {
   res.send(200);
 });
 
+const jwtSecret = "somesecret";
 const generateToken = user => {
   return jwt.sign(
     {
@@ -18,7 +28,7 @@ const generateToken = user => {
       iat: new Date().getTime(),
       user: user.username
     },
-    "somesecret",
+    jwtSecret,
     { expiresIn: "1h" }
   );
 };
@@ -40,16 +50,24 @@ app.post("/login", (req, res) => {
 });
 
 const verifyToken = token => {
-  return jwt.verify(token, "somesecret");
+  return jwt.verify(token, jwtSecret);
 };
 
 app.get("/secure", (req, res) => {
-  console.log(req.headers.authorization);
   const authorization = req.headers.authorization;
-  const token = authorization.split(" ")[1];
 
-  const payload = verifyToken(token);
-  const foundUser = db.findOne({ id: payload.sub });
+  if (!authorization) {
+    return res.sendStatus(401);
+  }
+
+  const token = authorization.split(" ")[1];
+  let payload;
+  let foundUser;
+
+  if (token) {
+    payload = verifyToken(token);
+    foundUser = db.findOne({ id: payload.sub });
+  }
 
   if (foundUser) {
     return res.json({ username: foundUser.username });
